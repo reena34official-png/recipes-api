@@ -117,8 +117,8 @@ async def add_final_review_to_state(ctx: Context, final_review: str) -> str:
     return "State updated with final review."
 def post_pr_review(pr_number: int, comment: str) -> str:
     """Post a pull request review to GitHub with the given comment body for the PR number."""
-    pull_request = repo.get_pull(pr_number)
-    pull_request.create_review(body=comment)
+    pull_request = repo.get_pull(int(pr_number))
+    pull_request.create_review(body=comment, event="COMMENT")
     return "Review posted successfully."
 pr_details_tool = FunctionTool.from_defaults(get_pr_details)
 file_contents_tool = FunctionTool.from_defaults(get_file_contents)
