@@ -1,6 +1,7 @@
 Thank you for your interest in contributing to **Recipe-API**! By participating in this project, you agree to abide by these guidelines.
 
 ---
+### Thank you Creating a new PR
 
 ## Issues
 
