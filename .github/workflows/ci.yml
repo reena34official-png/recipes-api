@@ -57,3 +57,50 @@ jobs:
           OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
           OPENAI_MODEL: gpt-4o-mini
         run: poetry run python agent.py $GITHUB_TOKEN $REPOSITORY $PR_NUMBER $OPENAI_API_KEY $OPENAI_BASE_URL
+
+      - name: Post PR review as Actions bot
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const pull_number = context.payload.pull_request.number;
+            const { owner, repo } = context.repo;
+            const reviews = await github.paginate(
+              github.rest.pulls.listReviews,
+              { owner, repo, pull_number }
+            );
+            for (const review of reviews) {
+              if (review.user?.login === 'github-actions[bot]' && review.state === 'PENDING') {
+                await github.rest.pulls.deletePendingReview({
+                  owner,
+                  repo,
+                  pull_number,
+                  review_id: review.id,
+                });
+              }
+            }
+            const hasBotReview = reviews.some(
+              (r) => r.user?.login === 'github-actions[bot]' && r.state !== 'PENDING'
+            );
+            if (hasBotReview) {
+              core.info('github-actions[bot] review already present.');
+              return;
+            }
+            if (!fs.existsSync('review_body.txt')) {
+              core.setFailed('review_body.txt was not created by the agent.');
+              return;
+            }
+            const body = fs.readFileSync('review_body.txt', 'utf8').trim();
+            if (!body) {
+              core.setFailed('Review body is empty.');
+              return;
+            }
+            await github.rest.pulls.createReview({
+              owner,
+              repo,
+              pull_number,
+              body,
+              event: 'COMMENT',
+              commit_id: context.payload.pull_request.head.sha,
+            });

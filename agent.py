@@ -1,6 +1,8 @@
 import asyncio
 import os
+from pathlib import Path
 from typing import Any
+
 import dotenv
 from github import Github
 from llama_index.core.agent.workflow import (
@@ -14,6 +16,7 @@ from llama_index.core.prompts import RichPromptTemplate
 from llama_index.core.tools import FunctionTool
 from llama_index.core.workflow import Context
 from llama_index.llms.openai import OpenAI
+
 dotenv.load_dotenv()
 llm = OpenAI(
     model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
@@ -22,7 +25,8 @@ llm = OpenAI(
 )
 git = Github(os.getenv("GITHUB_TOKEN")) if os.getenv("GITHUB_TOKEN") else None
 repository = os.getenv("REPOSITORY")
-pr_number = os.getenv("PR_NUMBER")
+pr_number = int(os.getenv("PR_NUMBER", "0"))
+_saved_review: str = ""
 repo = None
 if git is not None and repository:
     repo = git.get_repo(repository)
@@ -105,20 +109,62 @@ async def add_gathered_contexts_to_state(ctx: Context, gathered_contexts: str) -
     return "State updated with gathered contexts."
 async def add_draft_comment_to_state(ctx: Context, draft_comment: str) -> str:
     """Useful for saving the draft PR review comment into workflow state."""
+    global _saved_review
     current_state = await ctx.store.get("state")
     current_state["draft_comment"] = draft_comment
     await ctx.store.set("state", current_state)
+    _saved_review = draft_comment
     return "State updated with draft comment."
+
+
 async def add_final_review_to_state(ctx: Context, final_review: str) -> str:
     """Useful for saving the approved final PR review into workflow state."""
+    global _saved_review
     current_state = await ctx.store.get("state")
     current_state["final_review"] = final_review
     await ctx.store.set("state", current_state)
+    _saved_review = final_review
     return "State updated with final review."
+
+
+def _has_bot_review(pull_number: int) -> bool:
+    pull_request = repo.get_pull(pull_number)
+    return any(
+        review.user.login == "github-actions[bot]" and review.state != "PENDING"
+        for review in pull_request.get_reviews()
+    )
+
+
+def ensure_bot_review_posted(pull_number: int, comment: str) -> None:
+    """Post review locally; in CI the github-script workflow step posts as the bot."""
+    if os.getenv("GITHUB_ACTIONS") == "true":
+        if not comment.strip() and not Path("review_body.txt").exists():
+            raise SystemExit("Agent finished but no review text was produced to post.")
+        return
+    if _has_bot_review(pull_number):
+        return
+    if not comment.strip():
+        raise SystemExit("Agent finished but no review text was produced to post.")
+    post_pr_review(pull_number, comment)
+    if not _has_bot_review(pull_number):
+        raise SystemExit(
+            "post_pr_review ran but no submitted github-actions[bot] review found."
+        )
+
 def post_pr_review(pr_number: int, comment: str) -> str:
     """Post a pull request review to GitHub with the given comment body for the PR number."""
-    pull_request = repo.get_pull(int(pr_number))
-    pull_request.create_review(body=comment, event="COMMENT")
+    global _saved_review
+    _saved_review = comment
+    Path("review_body.txt").write_text(comment, encoding="utf-8")
+    if os.getenv("GITHUB_ACTIONS") == "true":
+        return "Review saved for CI posting step."
+    pull_number = int(pr_number)
+    pull_request = repo.get_pull(pull_number)
+    pull_request.create_review(
+        commit=pull_request.head.sha,
+        body=comment,
+        event="COMMENT",
+    )
     return "Review posted successfully."
 
 pr_details_tool = FunctionTool.from_defaults(get_pr_details)
@@ -183,6 +229,14 @@ async def main() -> None:
             print(f"Calling selected tool: {event.tool_name}, with arguments: {event.tool_kwargs}")
 
     await handler
+
+    if repo is not None and pr_number > 0:
+        ensure_bot_review_posted(pr_number, _saved_review)
+
+    if _saved_review.strip():
+        Path("review_body.txt").write_text(_saved_review, encoding="utf-8")
+
+
 if __name__ == "__main__":
     asyncio.run(main())
     if git is not None:
