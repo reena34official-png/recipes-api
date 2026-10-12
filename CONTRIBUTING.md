@@ -1,6 +1,11 @@
 Thank you for your interest in contributing to **Recipe-API**! By participating in this project, you agree to abide by these guidelines.
 
 ---
+### Thank you Creating a new PR
+
+## Testing agin Test Fialure 7
+
+## Testing again after fixng auth issues
 
 ## Issues
 
