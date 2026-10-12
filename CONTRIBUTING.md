@@ -5,7 +5,7 @@ Thank you for your interest in contributing to **Recipe-API**! By participating 
 
 ## Testing agin Test Fialure 7
 
-## Testing agian after fixng auth issues
+## Testing again after fixng auth issues
 
 ## Issues
 
