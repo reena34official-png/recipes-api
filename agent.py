@@ -120,6 +120,7 @@ def post_pr_review(pr_number: int, comment: str) -> str:
     pull_request = repo.get_pull(int(pr_number))
     pull_request.create_review(body=comment, event="COMMENT")
     return "Review posted successfully."
+
 pr_details_tool = FunctionTool.from_defaults(get_pr_details)
 file_contents_tool = FunctionTool.from_defaults(get_file_contents)
 pr_commit_details_tool = FunctionTool.from_defaults(get_pr_commit_details)
