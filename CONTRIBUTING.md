@@ -5,6 +5,8 @@ Thank you for your interest in contributing to **Recipe-API**! By participating 
 
 ## Testing agin Test Fialure 7
 
+## Testing agian after fixng auth issues
+
 ## Issues
 
 A well-crafted issue helps maintainers understand and reproduce your problem quickly. A good issue should include:
